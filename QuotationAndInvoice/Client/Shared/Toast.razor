@@ -1,0 +1,33 @@
+﻿@using QuotationAndInvoice.Shared
+
+@if (Messages?.Any() == true)
+{
+    <div class="position-fixed text-bg-secondary bottom-0 end-0 p-3 alert-danger" style="z-index: 11">
+        <div role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto">Error</strong>
+                <button type="button" class="btn-close btn-close-white" @onclick="Close" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                 <ul>
+                    @foreach (var message in Messages)
+                    {
+                        <li>
+                            @message
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public List<string> Messages { get; set; }
+
+    private void Close()
+    {
+        Messages.Clear();
+    }
+}

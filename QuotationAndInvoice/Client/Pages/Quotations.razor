@@ -1,0 +1,89 @@
+﻿@page "/Quotations"
+@page "/"
+@using QuotationAndInvoice.Shared
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>New Quotation</PageTitle>
+
+<h1 class="text-center">All Quotations</h1>
+
+@if (quotations == null)
+{
+    <div>Loading..</div>
+}
+else
+{
+    <div class="table-responsive-sm">
+        <table class="table table-sm table-bordered table-light table-striped caption-top">
+            <thead class="table-secondary">
+                <tr>
+                    <th>Quotation No</th>
+                    <th>Quotation Date</th>
+                    <th>Customer</th>
+                    <th>Quotation Total</th>
+                    <th>Pdf File</th>
+                    <th>Total Task Count</th>
+                    <th>Tasks</th>
+                    <th>Email Sended</th>
+                    @*<th>Action</th>*@
+                    @*<th>Images</th>                *@
+                </tr>
+            </thead>
+
+            <tbody class="table-group-divider">
+                @foreach (var quotation in quotations)
+                {
+                    <tr>
+                        <td>@quotation.No</td>
+                        <td>@quotation.Date.ToShortDateString()</td>
+                        <td>@quotation.Customer</td>
+                        <td>$ @quotation.Total</td>
+                        <td><a href=".\Quotation\GetPdf?quotationNo=@quotation.No" target="_blank">PDF</a></td>
+                        <td>@quotation.Tasks?.Count</td>
+                        <td>
+                            <ul>
+                                @if (quotation.Tasks != null)
+                                    @foreach (var task in quotation.Tasks)
+                                    {
+                                        <li>@task.Description $@task.Total</li>
+                                    }
+                            </ul>
+                        </td>
+                        <td>@quotation.ToEmail</td>
+                       @* <td>
+                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal">
+                                Launch demo modal
+                            </button>
+                        </td>*@
+                                    @* <td>
+                            <div class="card">
+                            <div class="card-body">
+                            <ul class="quotation-images">
+                            @if (quotation.Images != null)
+                            @foreach (var file in quotation.Images)
+                            {
+                            <li style="background-image: url(@file)">
+                            <div class="image-info">
+                            <span class="fileName">Image</span>
+                            </div>
+                            </li>
+                            }
+                            </ul>
+                            </div>
+                            </div>
+                            </td>*@
+                        @*<td><button class="btn btn-danger" @onclick="() => DeleteTask(task)">Delete</button></td>*@
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+@code {
+    private QuotationDto[]? quotations;
+
+    protected override async Task OnInitializedAsync()
+    {
+        quotations = await HttpClientFactory.CreateClient("LocalApi").GetFromJsonAsync<QuotationDto[]>("Quotation/List");
+    }
+}

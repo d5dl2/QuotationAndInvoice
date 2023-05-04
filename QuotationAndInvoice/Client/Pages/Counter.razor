@@ -1,0 +1,31 @@
+﻿@page "/counter"
+
+<PageTitle>Counter</PageTitle>
+
+<h1>Counter</h1>
+
+<p role="status">Current count: @t.counter</p>
+
+<button class="btn btn-primary" @onclick="IncrementCount">Click me</button>
+
+@code {
+    private int currentCount = 5;
+    private temp t = new temp();
+
+    protected override Task OnInitializedAsync()
+    {
+        currentCount = 10;
+        t.counter = 15;
+        return base.OnInitializedAsync();
+    }
+
+    private void IncrementCount()
+    {
+        currentCount++;
+    }
+
+    class temp
+    {
+        public int counter = 0;
+    }
+}

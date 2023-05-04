@@ -1,0 +1,277 @@
+﻿@page "/CreateQuotation"
+@using QuotationAndInvoice.Shared
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using System.Text
+@inject ILogger<CreateQuotation> Logger
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+
+<PageTitle>New Quotation</PageTitle>
+<fieldset @attributes=@attr>
+    <div class="container-fluid">
+
+        <h1 class="text-center">New Quotation</h1>
+        <div class="row">
+            <input class="col m-1" type="date" @bind="Quotation.Date" @bind:event="oninput" />
+            <input class="col m-1" placeholder="To:" @bind="Quotation.Customer" @bind:event="oninput" />
+            <input class="col m-1" placeholder="No:" @bind="Quotation.No" @bind:event="oninput" />
+        </div>
+        <div class="table-responsive-sm">
+            <table class="table table-sm table-bordered table-light table-striped caption-top">
+                <caption>List of Tasks</caption>
+                <thead class="table-secondary">
+                    <tr>
+                        <td>#</td>
+                        <th>Description</th>
+                        <th>Total</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody class="table-group-divider">
+                    @if (Quotation.Tasks.Any())
+                    {
+                        var c = 0;
+                        @foreach (var task in Quotation.Tasks)
+                        {
+                            <tr>
+                                <th scope="row">@c</th>
+                                <td>@task.Description</td>
+                                <td>$ @task.Total</td>
+                                <td><button class="btn btn-sm btn-outline-dark" @onclick="() => DeleteTask(task)">Delete</button></td>
+                            </tr>
+                            c++;
+                        }
+                    }
+                    <tr>
+                        <th scope="row">New</th>
+                        <td><input id="TaskDesc" @bind="Task.Description" @bind:event="oninput" /></td>
+                        <td><input @bind="Task.Total" @bind:event="oninput" /></td>
+                        <td><button class="btn btn-secondary btn-sm" @onclick="AddTask">Add</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+
+        <div class="row">
+            <h4>Images</h4>
+            <p>
+                <label>
+                    Upload up to @maxAllowedFiles files with size up to @MBofMaxFileSize MegaBytes:
+                    <InputFile OnChange="@LoadFiles" multiple accept=".jpg,.jpeg, .bmp, .png" />
+                </label>
+                @if (loadedFiles.Any())
+                {
+                    <label>
+                        @loadedFiles.Count files loaded.
+                    </label>
+                }
+            </p>
+            @if (isLoading)
+            {
+                <p>Uploading...</p>
+            }
+            else
+            {
+                if (loadedFiles.Any())
+                {
+                    <div class="card">
+                        <div class="card-body">
+                            <ul class="quotation-images">
+                                @foreach (var file in loadedFiles)
+                                {
+                                   @* <li style="background-image: url(@file.Base64Content)">
+                                        <div class="image-info">
+                                            <span class="fileName">@file.browserFile.Name</span>
+                                        </div>
+                                    </li>*@
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+        <div class="col float-end">
+            <input class="col m-1" placeholder="Email Address" @bind="Quotation.ToEmail" type="email" />
+            <button class="col m-1 btn btn-outline-secondary" @onclick="SaveQuotation">SAVE & SEND EMAIL</button>
+        </div>
+    </div>
+</fieldset>
+@if (spinning)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+<Toast Messages="@Messages" />
+
+@code {
+    private QuotationDto Quotation = new QuotationDto();
+    private QuotationTaskDto Task = new QuotationTaskDto();
+    private List<string> Messages = new List<string>();
+    private bool spinning = false;
+    private Dictionary<string, object> attr = new Dictionary<string, object>();
+    protected override async Task OnInitializedAsync()
+    {
+        var maxQuotation = await HttpClientFactory.CreateClient("LocalApi").GetFromJsonAsync<int>("Quotation/GetMaxQuotationNo");
+        Quotation.No = maxQuotation + 1;
+        Quotation.Date = DateTime.Now;
+        await JS.InvokeVoidAsync("focusElement", "TaskDesc");
+        await base.OnInitializedAsync();
+    }
+
+
+    private async Task AddTask()
+    {
+        if (string.IsNullOrEmpty(Task.Description))
+        {
+            Messages.Add(nameof(Task.Description) + " can not be empty!");            
+            return;
+        }
+        Quotation.Tasks.Add(Task);
+        Task = new QuotationTaskDto();
+        Messages.Clear();
+        await JS.InvokeVoidAsync("focusElement", "TaskDesc");
+    }
+
+    private void DeleteTask(QuotationTaskDto g)
+    {
+        Quotation.Tasks.Remove(g);
+    }
+
+
+    private List<CustomBrowserFile> loadedFiles = new();
+    private long maxFileSize = 1024 * 1024 * MBofMaxFileSize;
+    private const long MBofMaxFileSize = 10;
+    private int maxAllowedFiles = 40;
+    private bool isLoading;
+
+
+    private async Task LoadFiles(InputFileChangeEventArgs e)
+    {
+        isLoading = true;
+        foreach (var file in e.GetMultipleFiles(maxAllowedFiles))
+        {
+            try
+            {
+                if (loadedFiles.Count >= maxAllowedFiles)
+                    break;
+
+                if (!loadedFiles.Any(x => x.browserFile.Name == file.Name))
+                {
+                    var cbf = new CustomBrowserFile();
+                    cbf.browserFile = file;
+
+                    await using MemoryStream ms = new();
+                    await file.OpenReadStream(maxFileSize).CopyToAsync(ms);
+                    //cbf.Base64Content = ConvertImageToDisplay(ms.ToArray());
+
+                    loadedFiles.Add(cbf);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("File: {Filename} Error: {Error}", file.Name, ex.Message);
+            }
+        }
+
+        isLoading = false;
+    }
+
+    string ConvertImageToDisplay(byte[] bytes)
+    {
+        var base64 = Convert.ToBase64String(bytes);
+        return string.Format("data:image/jpg;base64,{0}", base64);
+    }
+    private void TogglePageDisable()
+    {
+        if (spinning)
+        {            
+            spinning = false;
+            attr.Remove("disabled");
+        }
+        else
+        {
+            Messages.Clear();
+            spinning = true;
+            attr.Add("disabled", "disabled");
+        }
+    }
+    private async Task SaveQuotation()
+    {
+        using var content = new MultipartFormDataContent();
+        TogglePageDisable();
+        try
+        {
+            foreach (var cbf in loadedFiles)
+            {
+                var file = cbf.browserFile;
+
+                try
+                {
+                    var fileContent =
+                        new StreamContent(file.OpenReadStream(maxFileSize));
+                    fileContent.Headers.ContentType =
+                        new MediaTypeHeaderValue(file.ContentType);
+
+                    content.Add(
+                        content: fileContent,
+                        name: "\"Files\"",
+                        fileName: file.Name);
+
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogInformation(
+                        "{FileName} not uploaded (Err: 6): {Message}", file.Name, ex.Message);
+                }
+            }
+            var json = JsonSerializer.Serialize(Quotation);
+            content.Add(new StringContent(json, Encoding.UTF8, "application/json"), "QuotationDto");
+
+            var response = await HttpClientFactory.CreateClient("LocalApi").PostAsync("Quotation/Save", content);
+
+
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                var validationErrors = await response.Content.ReadAsStringAsync();
+                var res = JsonSerializer.Deserialize<Dictionary<string, string[]>>(validationErrors);
+                Messages = res.Select(x => x.Key + ":" + string.Join(",", x.Value)).ToList();
+            }
+            else if ((int)response.StatusCode == 401)
+            {
+                Messages.Add(await response.Content.ReadAsStringAsync());
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                //var res = await response.Content.ReadAsStreamAsync();
+                //var streamRef = new DotNetStreamReference(res);
+
+                //var fn = "Quotation" + Quotation.No + ".pdf";
+                //await JS.InvokeVoidAsync("downloadFileFromStream", fn, streamRef);
+                NavigationManager.NavigateTo("Quotations");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex.ToString());
+            Messages.Add(ex.Message);
+        }
+        finally
+        {
+            TogglePageDisable();
+        }
+    }
+
+    class CustomBrowserFile
+    {
+        public IBrowserFile browserFile;
+        public string Base64Content { get; set; }
+    }
+
+}
